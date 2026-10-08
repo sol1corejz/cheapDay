@@ -220,6 +220,11 @@ button { touch-action: manipulation; cursor: pointer; }
   font-size: 13px;
 }
 
+.primary:disabled, .ghost:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .primary {
   border: 0;
   background: var(--fill);

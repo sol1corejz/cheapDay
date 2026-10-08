@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { aiConfigured } from "./ai.js";
 import { describeDraft, plural } from "./plan.js";
 import { useStore } from "./store.js";
 
@@ -7,12 +8,15 @@ export function SetupForm({ onAbout }) {
   const dayCount = useStore((state) => state.dayCount);
   const error = useStore((state) => state.error);
   const plan = useStore((state) => state.plan);
+  const busy = useStore((state) => state.busy);
   const setBudget = useStore((state) => state.setBudget);
   const setDays = useStore((state) => state.setDays);
   const commit = useStore((state) => state.commit);
+  const commitAi = useStore((state) => state.commitAi);
   const cancelEdit = useStore((state) => state.cancelEdit);
   const inputRef = useRef(null);
   const draft = describeDraft(budget, dayCount);
+  const hasAi = aiConfigured();
 
   useEffect(() => {
     if (plan) inputRef.current?.focus();
@@ -54,13 +58,21 @@ export function SetupForm({ onAbout }) {
         <p className="sub">{draft.sub}</p>
       </div>
       <p className="error" role="alert">{error}</p>
-      <button className="primary" type="submit">{plan ? "Пересчитать заново" : "Собрать дни"}</button>
+      <button className="primary" type="submit" disabled={busy}>
+        {plan ? "Пересчитать заново" : "Собрать дни"}
+      </button>
+      {hasAi ? (
+        <button className="ghost" type="button" disabled={busy} onClick={() => commitAi()}>
+          {busy ? "Думаю…" : "Умный набор"}
+        </button>
+      ) : null}
       {plan ? (
-        <button className="ghost" type="button" onClick={cancelEdit}>Оставить как есть</button>
+        <button className="ghost" type="button" disabled={busy} onClick={cancelEdit}>Оставить как есть</button>
       ) : (
         <button className="linkish" type="button" onClick={onAbout}>Откуда цены</button>
       )}
       <p className="sub">План сохранится на {dayCount} {plural(dayCount, "день", "дня", "дней")}, потом сотрётся.</p>
+      {hasAi ? <p className="sub">«Умный набор» идёт через DeepSeek. Обычный набор работает без интернета.</p> : null}
     </form>
   );
 }

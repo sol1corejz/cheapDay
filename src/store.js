@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { DAY_MS, applyTtl, buildPlan, freshDays, parseMoney, todayISO } from "./plan.js";
+import { fetchAiPlan } from "./ai.js";
+import { DAY_MS, applyTtl, buildPlan, freshDays, parseMoney, planFromAi, todayISO } from "./plan.js";
 
 const KEY = "cheapday.v2";
 
@@ -38,6 +39,7 @@ export const useStore = create(
       hint: true,
       editing: false,
       expiresAt: null,
+      busy: false,
       setBudget: (budget) => set({ budget, error: "" }),
       setDays: (dayCount) => set({ dayCount }),
       toggleTheme: () => set({ theme: get().theme === "dark" ? "light" : "dark" }),
@@ -65,14 +67,45 @@ export const useStore = create(
         set({
           error: "",
           editing: false,
+          busy: false,
           expiresAt: Date.now() + dayCount * DAY_MS,
           plan: buildPlan({
             total,
             dayCount,
             start: todayISO(),
             days: freshDays(dayCount),
+            catalog: {},
+            source: "local",
           }),
         });
+      },
+      commitAi: async () => {
+        const total = parseMoney(get().budget);
+        if (!total || total < 50) {
+          set({ error: "Нужна сумма хотя бы 50 ₽." });
+          return;
+        }
+        if (total > 1000000) {
+          set({ error: "Пока считаю бюджет до 1 000 000 ₽." });
+          return;
+        }
+        if (get().dayCount > 14) {
+          set({ error: "Умный набор пока до 14 дней." });
+          return;
+        }
+        set({ busy: true, error: "" });
+        try {
+          const aiDays = await fetchAiPlan(total, get().dayCount);
+          const dayCount = get().dayCount;
+          set({
+            busy: false,
+            editing: false,
+            expiresAt: Date.now() + dayCount * DAY_MS,
+            plan: planFromAi(total, dayCount, todayISO(), aiDays),
+          });
+        } catch (error) {
+          set({ busy: false, error: error.message || "AI не ответил" });
+        }
       },
       dropItem: (index, id) => {
         const plan = get().plan;
@@ -88,7 +121,7 @@ export const useStore = create(
         const days = plan.days.map((day, i) => (
           i === index ? { ...day, locked: false, seed: day.seed + 1 } : day
         ));
-        set({ plan: buildPlan({ ...plan, days }) });
+        set({ plan: buildPlan({ ...plan, days, source: "local" }) });
       },
     }),
     {

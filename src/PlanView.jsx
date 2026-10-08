@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  ITEMS,
   MEALS,
   addDays,
   carryText,
   formatDate,
   formatRange,
+  getItem,
   isSameDay,
   money,
   plural,
@@ -131,14 +131,14 @@ export function PlanView({ onAbout }) {
             </header>
             {day.items.length === 0 ? <p className="empty-day">На эту сумму набора нет.</p> : null}
             {MEALS.map((meal) => {
-              const rows = day.items.filter((id) => ITEMS[id]?.meal === meal);
+              const rows = day.items.filter((id) => getItem(id, plan.catalog)?.meal === meal);
               if (!rows.length) return null;
               return (
                 <section className="meal" key={meal}>
                   <h4>{meal}</h4>
                   <ul>
                     {rows.map((id) => {
-                      const item = ITEMS[id];
+                      const item = getItem(id, plan.catalog);
                       return (
                         <li className="item" key={id}>
                           <div className="item-line">

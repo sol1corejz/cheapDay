@@ -155,8 +155,12 @@ export function describeDraft(budget, days) {
   };
 }
 
-function sumPrices(ids) {
-  return ids.reduce((sum, id) => sum + ITEMS[id].price, 0);
+export function getItem(id, catalog = {}) {
+  return ITEMS[id] || catalog[id] || null;
+}
+
+function sumPrices(ids, catalog = {}) {
+  return ids.reduce((sum, id) => sum + (getItem(id, catalog)?.price || 0), 0);
 }
 
 function fitList(ids, allowance, usedStock) {
@@ -204,10 +208,35 @@ function composeDay(allowance, salt, usedStock) {
   return chosen;
 }
 
-function trimTo(ids, allowance) {
-  const next = ids.filter((id) => ITEMS[id]);
-  while (next.length && sumPrices(next) > allowance) next.pop();
+function trimTo(ids, allowance, catalog = {}) {
+  const next = ids.filter((id) => getItem(id, catalog));
+  while (next.length && sumPrices(next, catalog) > allowance) next.pop();
   return next;
+}
+
+export function planFromAi(total, dayCount, start, aiDays) {
+  const catalog = {};
+  const days = aiDays.map((day, dayIndex) => {
+    const items = (day.items || []).map((item, itemIndex) => {
+      const id = `ai-${dayIndex}-${itemIndex}`;
+      catalog[id] = {
+        name: item.name,
+        amount: item.amount,
+        price: item.price,
+        meal: item.meal,
+      };
+      return id;
+    });
+    return { seed: 0, locked: true, items };
+  });
+  return buildPlan({
+    total,
+    dayCount,
+    start,
+    days,
+    catalog,
+    source: "ai",
+  });
 }
 
 export function freshDays(count) {
@@ -220,17 +249,18 @@ export function buildPlan(model) {
   const usedStock = new Set();
   const days = [];
   let incoming = false;
+  const catalog = model.catalog || {};
 
   for (let i = 0; i < model.dayCount; i += 1) {
     const prev = model.days[i];
     const allowance = Math.ceil(left / (model.dayCount - i));
     const items = prev.locked
-      ? trimTo(prev.items, allowance)
+      ? trimTo(prev.items, allowance, catalog)
       : composeDay(allowance, prev.seed * 13 + i, usedStock);
     items.forEach((id) => {
-      if (ITEMS[id].stock) usedStock.add(id);
+      if (getItem(id, catalog)?.stock) usedStock.add(id);
     });
-    const spent = sumPrices(items);
+    const spent = sumPrices(items, catalog);
     const carry = allowance - spent;
     const diff = allowance - equal;
     days.push({
@@ -248,7 +278,7 @@ export function buildPlan(model) {
     left -= spent;
   }
 
-  return { ...model, days, leftover: left };
+  return { ...model, catalog, days, leftover: left };
 }
 
 export function carryText(carry, isLast) {
